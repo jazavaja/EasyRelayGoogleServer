@@ -1,9 +1,22 @@
 services:
+
+  cert-gen:
+    image: alpine/openssl
+    restart: "no"
+    volumes:
+      - certs:/certs
+    command: >
+      req -x509 -nodes -newkey rsa:2048
+      -keyout /certs/server.key
+      -out    /certs/server.crt
+      -days   3650
+      -subj   "/CN=exit-node"
+
   exit-node:
     build: .
     restart: always
-    ports:
-      - "${EXIT_NODE_PORT:-8181}:${EXIT_NODE_PORT:-8181}"
+    expose:
+      - "${EXIT_NODE_PORT:-8181}"
     env_file:
       - .env
     environment:
@@ -20,9 +33,7 @@ services:
     healthcheck:
       test:
         [
-          "CMD",
-          "python",
-          "-c",
+          "CMD", "python", "-c",
           "import urllib.request; urllib.request.urlopen('http://localhost:${EXIT_NODE_PORT:-8181}/')",
         ]
       interval: 30s
@@ -34,3 +45,31 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+  nginx:
+      image: nginx:1.27-alpine
+      restart: always
+      depends_on:
+        cert-gen:
+          condition: service_completed_successfully
+        exit-node:
+          condition: service_healthy
+      ports:
+        - "80:80"
+        - "443:443"
+      environment:
+        - EXIT_NODE_PORT=${EXIT_NODE_PORT:-8181}
+        - EXIT_NODE_MAX_REQUEST_MB=${EXIT_NODE_MAX_REQUEST_MB:-32}
+      volumes:
+        - ./nginx/nginx.conf.template:/etc/easy-relay-google/nginx/nginx.conf.template:ro
+        - ./nginx/entrypoint.sh:/entrypoint.sh:ro
+        - certs:/etc/easy-relay-google/certs:ro
+      command: ["sh", "/entrypoint.sh"]
+      logging:
+        driver: "json-file"
+        options:
+          max-size: "10m"
+          max-file: "3"
+
+volumes:
+  certs:

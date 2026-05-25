@@ -1,0 +1,50 @@
+events {
+    worker_connections 1024;
+}
+
+http {
+    upstream exit_node {
+        server exit-node:${EXIT_NODE_PORT};
+        keepalive 32;
+    }
+
+    server {
+        listen 443 ssl;
+        server_name _;
+
+        ssl_certificate     /etc/easy-relay-google/certs/server.crt;
+        ssl_certificate_key /etc/easy-relay-google/certs/server.key;
+        ssl_protocols       TLSv1.2 TLSv1.3;
+        ssl_ciphers         HIGH:!aNULL:!MD5;
+        ssl_session_cache   shared:SSL:10m;
+        ssl_session_timeout 10m;
+
+        client_max_body_size ${EXIT_NODE_MAX_REQUEST_MB}m;
+
+        location /easy-relay-google/ {
+            rewrite ^/easy-relay-google(/.*)$ $1 break;
+
+            proxy_pass         http://exit_node;
+            proxy_http_version 1.1;
+            proxy_set_header   Connection        "";
+            proxy_set_header   X-Real-IP         $remote_addr;
+            proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+            proxy_set_header   X-Forwarded-Proto https;
+            proxy_set_header   Host              $host;
+
+            proxy_connect_timeout  5s;
+            proxy_read_timeout     30s;
+            proxy_send_timeout     10s;
+        }
+
+        location / {
+            return 404;
+        }
+    }
+
+    server {
+        listen 80;
+        server_name _;
+        return 301 https://$host$request_uri;
+    }
+}
