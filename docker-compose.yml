@@ -1,0 +1,36 @@
+services:
+  exit-node:
+    build: .
+    restart: always
+    ports:
+      - "${EXIT_NODE_PORT:-8181}:${EXIT_NODE_PORT:-8181}"
+    env_file:
+      - .env
+    environment:
+      - EXIT_NODE_PSK=${EXIT_NODE_PSK}
+      - EXIT_NODE_PORT=${EXIT_NODE_PORT:-8181}
+      - EXIT_NODE_HOST=${EXIT_NODE_HOST:-0.0.0.0}
+      - EXIT_NODE_WORKERS=${EXIT_NODE_WORKERS:-50}
+      - EXIT_NODE_CONNECT_TIMEOUT=${EXIT_NODE_CONNECT_TIMEOUT:-5}
+      - EXIT_NODE_READ_TIMEOUT=${EXIT_NODE_READ_TIMEOUT:-25}
+      - EXIT_NODE_POOL_SIZE=${EXIT_NODE_POOL_SIZE:-20}
+      - EXIT_NODE_MAX_REQUEST_MB=${EXIT_NODE_MAX_REQUEST_MB:-32}
+      - EXIT_NODE_MAX_RESPONSE_MB=${EXIT_NODE_MAX_RESPONSE_MB:-64}
+      - EXIT_NODE_LOG_LEVEL=${EXIT_NODE_LOG_LEVEL:-INFO}
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:${EXIT_NODE_PORT:-8181}/')",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
